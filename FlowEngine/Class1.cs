@@ -86,6 +86,7 @@ public sealed class ExecutionContext
     public List<StepExecutionResult> StepResults { get; } = [];
     public int? StartStepIndex { get; init; }
     public bool StopRequested { get; private set; }
+    public Action<StepExecutionResult>? OnStepCompleted { get; set; }
 
     public void RequestStop() => StopRequested = true;
 }
@@ -287,6 +288,7 @@ public sealed class FlowRunner
             result.DurationMs = watch.ElapsedMilliseconds;
             result.EndedAt = DateTimeOffset.UtcNow;
             context.StepResults.Add(result);
+            context.OnStepCompleted?.Invoke(result);
         }
 
         return result;

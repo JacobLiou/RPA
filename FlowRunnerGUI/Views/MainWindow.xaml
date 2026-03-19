@@ -1,0 +1,353 @@
+<Window x:Class="FlowRunnerGUI.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+        xmlns:vm="clr-namespace:FlowRunnerGUI.ViewModels"
+        xmlns:conv="clr-namespace:FlowRunnerGUI.Converters"
+        mc:Ignorable="d"
+        Title="RPA Flow Runner"
+        Width="1200" Height="780" MinWidth="900" MinHeight="600"
+        WindowStartupLocation="CenterScreen"
+        Style="{StaticResource MaterialDesignWindow}"
+        TextElement.Foreground="{DynamicResource MaterialDesign.Brush.Foreground}"
+        Background="{DynamicResource MaterialDesign.Brush.Background}"
+        TextElement.FontWeight="Regular"
+        TextElement.FontSize="13"
+        FontFamily="{materialDesign:MaterialDesignFont}">
+
+    <Window.DataContext>
+        <vm:MainViewModel />
+    </Window.DataContext>
+
+    <Window.Resources>
+        <conv:StatusToBrushConverter x:Key="StatusToBrush" />
+        <conv:BoolToBrushConverter x:Key="BoolToBrush" />
+        <conv:InverseBoolConverter x:Key="InverseBool" />
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+    </Window.Resources>
+
+    <materialDesign:DialogHost Identifier="RootDialog">
+        <DockPanel>
+            <!-- Top Toolbar -->
+            <materialDesign:ColorZone Mode="PrimaryMid" DockPanel.Dock="Top"
+                                      Padding="12,8" materialDesign:ElevationAssist.Elevation="Dp4">
+                <DockPanel>
+                    <TextBlock Text="RPA Flow Runner" FontSize="18" FontWeight="Bold"
+                               VerticalAlignment="Center" Margin="0,0,24,0" />
+
+                    <StackPanel Orientation="Horizontal" DockPanel.Dock="Right"
+                                HorizontalAlignment="Right" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding StatusMessage}" VerticalAlignment="Center"
+                                   Foreground="White" Opacity="0.85" MaxWidth="400"
+                                   TextTrimming="CharacterEllipsis" Margin="0,0,12,0" />
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button Style="{StaticResource MaterialDesignFlatMidBgButton}"
+                                Command="{Binding OpenFolderCommand}" Margin="0,0,6,0"
+                                ToolTip="Open folder with flow JSON files">
+                            <StackPanel Orientation="Horizontal">
+                                <materialDesign:PackIcon Kind="FolderOpen" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                <TextBlock Text="Open Folder" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+
+                        <Button Style="{StaticResource MaterialDesignFlatMidBgButton}"
+                                Command="{Binding OpenFileCommand}" Margin="0,0,12,0"
+                                ToolTip="Open individual flow JSON file(s)">
+                            <StackPanel Orientation="Horizontal">
+                                <materialDesign:PackIcon Kind="FileDocument" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                <TextBlock Text="Open File" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+
+                        <Separator Style="{StaticResource MaterialDesignLightSeparator}" Margin="0,4" />
+
+                        <Button Style="{StaticResource MaterialDesignRaisedSecondaryButton}"
+                                Command="{Binding RunFlowCommand}" Margin="6,0"
+                                ToolTip="Run selected flow">
+                            <StackPanel Orientation="Horizontal">
+                                <materialDesign:PackIcon Kind="Play" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                <TextBlock Text="Run" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+
+                        <Button Style="{StaticResource MaterialDesignOutlinedButton}"
+                                Command="{Binding StopFlowCommand}" Margin="0,0,6,0"
+                                Foreground="White"
+                                ToolTip="Stop running flow">
+                            <StackPanel Orientation="Horizontal">
+                                <materialDesign:PackIcon Kind="Stop" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                <TextBlock Text="Stop" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </DockPanel>
+            </materialDesign:ColorZone>
+
+            <!-- Running indicator -->
+            <ProgressBar DockPanel.Dock="Top" IsIndeterminate="True" Height="3"
+                         Visibility="{Binding IsRunning, Converter={StaticResource BoolToVis}}" />
+
+            <!-- Main content -->
+            <Grid Margin="12,12,12,8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="280" MinWidth="200" />
+                    <ColumnDefinition Width="8" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <!-- Left: Flow List Panel -->
+                <materialDesign:Card Grid.Column="0" materialDesign:ElevationAssist.Elevation="Dp2"
+                                     Padding="0" UniformCornerRadius="8">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Top" Text="Flows"
+                                   FontSize="15" FontWeight="SemiBold"
+                                   Margin="14,12,14,4" />
+
+                        <TextBox DockPanel.Dock="Top" Margin="10,4,10,8"
+                                 materialDesign:HintAssist.Hint="Search flows..."
+                                 materialDesign:TextFieldAssist.HasClearButton="True"
+                                 Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                 FontSize="12" Padding="8,6" />
+
+                        <ListBox ItemsSource="{Binding Flows}"
+                                 SelectedItem="{Binding SelectedFlow}"
+                                 HorizontalContentAlignment="Stretch"
+                                 VirtualizingPanel.IsVirtualizing="True"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:FlowItemViewModel}">
+                                    <StackPanel Margin="4,6">
+                                        <TextBlock Text="{Binding DisplayName}" FontWeight="Medium"
+                                                   FontSize="13" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Opacity="0.6" FontSize="11" Margin="0,2,0,0">
+                                            <Run Text="{Binding StepCount, Mode=OneWay}" />
+                                            <Run Text="steps" />
+                                            <Run Text=" | " />
+                                            <Run Text="{Binding VariableCount, Mode=OneWay}" />
+                                            <Run Text="vars" />
+                                        </TextBlock>
+                                        <TextBlock Text="{Binding ShortPath}" Opacity="0.45"
+                                                   FontSize="10" TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </DockPanel>
+                </materialDesign:Card>
+
+                <GridSplitter Grid.Column="1" Width="8" Background="Transparent"
+                              HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+
+                <!-- Right: Tabs -->
+                <TabControl Grid.Column="2" SelectedIndex="{Binding SelectedTabIndex}"
+                            Style="{StaticResource MaterialDesignFilledTabControl}">
+
+                    <!-- TAB: Execute -->
+                    <TabItem>
+                        <TabItem.Header>
+                            <StackPanel Orientation="Horizontal">
+                                <materialDesign:PackIcon Kind="PlayCircle" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                <TextBlock Text="Execute" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </TabItem.Header>
+
+                        <DockPanel Margin="4,8">
+                            <!-- Flow Info Card -->
+                            <materialDesign:Card DockPanel.Dock="Top" UniformCornerRadius="8"
+                                                 Padding="16,12" Margin="0,0,0,10"
+                                                 materialDesign:ElevationAssist.Elevation="Dp1">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock FontSize="16" FontWeight="SemiBold"
+                                                   Text="{Binding SelectedFlow.DisplayName, FallbackValue='(No flow selected)'}" />
+                                        <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                            <TextBlock Opacity="0.6" FontSize="12">
+                                                <Run Text="ID: " />
+                                                <Run Text="{Binding SelectedFlow.FlowId, FallbackValue='-', Mode=OneWay}" />
+                                            </TextBlock>
+                                            <TextBlock Opacity="0.6" FontSize="12" Margin="16,0,0,0">
+                                                <Run Text="Version: " />
+                                                <Run Text="{Binding SelectedFlow.Version, FallbackValue='-', Mode=OneWay}" />
+                                            </TextBlock>
+                                            <TextBlock Opacity="0.6" FontSize="12" Margin="16,0,0,0">
+                                                <Run Text="Steps: " />
+                                                <Run Text="{Binding SelectedFlow.StepCount, FallbackValue='0', Mode=OneWay}" />
+                                            </TextBlock>
+                                            <TextBlock Opacity="0.6" FontSize="12" Margin="16,0,0,0">
+                                                <Run Text="Variables: " />
+                                                <Run Text="{Binding SelectedFlow.VariableCount, FallbackValue='0', Mode=OneWay}" />
+                                            </TextBlock>
+                                        </StackPanel>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock FontSize="13" VerticalAlignment="Center" Margin="0,0,8,0">
+                                            <Run Text="{Binding ProgressValue, Mode=OneWay}" />
+                                            <Run Text="/" />
+                                            <Run Text="{Binding ProgressMax, Mode=OneWay}" />
+                                        </TextBlock>
+                                        <ProgressBar Value="{Binding ProgressValue}" Maximum="{Binding ProgressMax}"
+                                                     Width="160" Height="8"
+                                                     Style="{StaticResource MaterialDesignLinearProgressBar}" />
+                                    </StackPanel>
+                                </Grid>
+                            </materialDesign:Card>
+
+                            <!-- Log at bottom -->
+                            <materialDesign:Card DockPanel.Dock="Bottom" UniformCornerRadius="8"
+                                                 Padding="0" Margin="0,10,0,0" Height="180"
+                                                 materialDesign:ElevationAssist.Elevation="Dp1">
+                                <DockPanel>
+                                    <DockPanel DockPanel.Dock="Top" Margin="14,8,8,4">
+                                        <TextBlock Text="Log Output" FontSize="13" FontWeight="Medium"
+                                                   VerticalAlignment="Center" />
+                                        <Button DockPanel.Dock="Right" HorizontalAlignment="Right"
+                                                Style="{StaticResource MaterialDesignToolForegroundButton}"
+                                                Command="{Binding ClearLogCommand}" ToolTip="Clear log"
+                                                Padding="4" Height="28" Width="28">
+                                            <materialDesign:PackIcon Kind="Delete" Width="16" Height="16" />
+                                        </Button>
+                                    </DockPanel>
+                                    <TextBox Text="{Binding LogText, Mode=OneWay}" IsReadOnly="True"
+                                             FontFamily="Consolas" FontSize="11.5"
+                                             VerticalScrollBarVisibility="Auto"
+                                             HorizontalScrollBarVisibility="Auto"
+                                             TextWrapping="NoWrap" AcceptsReturn="True"
+                                             BorderThickness="0" Padding="14,4"
+                                             x:Name="LogBox" TextChanged="LogBox_TextChanged" />
+                                </DockPanel>
+                            </materialDesign:Card>
+
+                            <!-- Step Results Grid in the middle -->
+                            <DataGrid ItemsSource="{Binding StepResults}"
+                                      AutoGenerateColumns="False" IsReadOnly="True"
+                                      CanUserAddRows="False" CanUserDeleteRows="False"
+                                      HeadersVisibility="Column" GridLinesVisibility="Horizontal"
+                                      SelectionMode="Single"
+                                      VerticalScrollBarVisibility="Auto"
+                                      materialDesign:DataGridAssist.CornerRadius="8"
+                                      materialDesign:DataGridAssist.CellPadding="12 8"
+                                      Margin="0,0,0,0">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="" Binding="{Binding StatusIcon}" Width="30">
+                                        <DataGridTextColumn.ElementStyle>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="FontSize" Value="16" />
+                                                <Setter Property="HorizontalAlignment" Value="Center" />
+                                                <Setter Property="Foreground" Value="{Binding Status, Converter={StaticResource StatusToBrush}}" />
+                                            </Style>
+                                        </DataGridTextColumn.ElementStyle>
+                                    </DataGridTextColumn>
+                                    <DataGridTextColumn Header="Step ID" Binding="{Binding StepId}" Width="140" />
+                                    <DataGridTextColumn Header="Name" Binding="{Binding StepName}" Width="*" />
+                                    <DataGridTextColumn Header="Type" Binding="{Binding StepType}" Width="100" />
+                                    <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="80">
+                                        <DataGridTextColumn.ElementStyle>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="FontWeight" Value="SemiBold" />
+                                                <Setter Property="Foreground" Value="{Binding Status, Converter={StaticResource StatusToBrush}}" />
+                                            </Style>
+                                        </DataGridTextColumn.ElementStyle>
+                                    </DataGridTextColumn>
+                                    <DataGridTextColumn Header="Duration" Width="90">
+                                        <DataGridTextColumn.Binding>
+                                            <Binding Path="DurationMs" StringFormat="{}{0} ms" />
+                                        </DataGridTextColumn.Binding>
+                                        <DataGridTextColumn.ElementStyle>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="HorizontalAlignment" Value="Right" />
+                                            </Style>
+                                        </DataGridTextColumn.ElementStyle>
+                                    </DataGridTextColumn>
+                                    <DataGridTextColumn Header="Error" Binding="{Binding ErrorMessage}" Width="200">
+                                        <DataGridTextColumn.ElementStyle>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="{StaticResource MaterialDesign.Brush.ValidationError}" />
+                                                <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+                                            </Style>
+                                        </DataGridTextColumn.ElementStyle>
+                                    </DataGridTextColumn>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </DockPanel>
+                    </TabItem>
+
+                    <!-- TAB: History -->
+                    <TabItem>
+                        <TabItem.Header>
+                            <StackPanel Orientation="Horizontal">
+                                <materialDesign:PackIcon Kind="History" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                <TextBlock Text="History" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </TabItem.Header>
+
+                        <DockPanel Margin="4,8">
+                            <TextBlock DockPanel.Dock="Top" Text="Run History"
+                                       FontSize="15" FontWeight="SemiBold" Margin="4,0,0,10" />
+
+                            <DataGrid ItemsSource="{Binding RunHistory}"
+                                      AutoGenerateColumns="False" IsReadOnly="True"
+                                      CanUserAddRows="False" CanUserDeleteRows="False"
+                                      HeadersVisibility="Column" GridLinesVisibility="Horizontal"
+                                      SelectionMode="Single"
+                                      VerticalScrollBarVisibility="Auto"
+                                      materialDesign:DataGridAssist.CornerRadius="8"
+                                      materialDesign:DataGridAssist.CellPadding="12 8">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Result" Binding="{Binding SuccessText}" Width="60">
+                                        <DataGridTextColumn.ElementStyle>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="FontWeight" Value="Bold" />
+                                                <Setter Property="Foreground" Value="{Binding Success, Converter={StaticResource BoolToBrush}}" />
+                                            </Style>
+                                        </DataGridTextColumn.ElementStyle>
+                                    </DataGridTextColumn>
+                                    <DataGridTextColumn Header="Flow Name" Binding="{Binding FlowName}" Width="*" />
+                                    <DataGridTextColumn Header="Run ID" Width="100">
+                                        <DataGridTextColumn.Binding>
+                                            <Binding Path="RunId" StringFormat="{}{0}" />
+                                        </DataGridTextColumn.Binding>
+                                        <DataGridTextColumn.ElementStyle>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+                                                <Setter Property="Opacity" Value="0.7" />
+                                            </Style>
+                                        </DataGridTextColumn.ElementStyle>
+                                    </DataGridTextColumn>
+                                    <DataGridTextColumn Header="Steps" Binding="{Binding StepCount}" Width="60">
+                                        <DataGridTextColumn.ElementStyle>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="HorizontalAlignment" Value="Center" />
+                                            </Style>
+                                        </DataGridTextColumn.ElementStyle>
+                                    </DataGridTextColumn>
+                                    <DataGridTextColumn Header="Finished At" Binding="{Binding TimeText}" Width="160" />
+                                    <DataGridTemplateColumn Header="Actions" Width="80">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <Button Style="{StaticResource MaterialDesignToolForegroundButton}"
+                                                        Command="{Binding DataContext.ViewHistoryDetailCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                        CommandParameter="{Binding}"
+                                                        ToolTip="View run details" Padding="4" Height="28" Width="28">
+                                                    <materialDesign:PackIcon Kind="Eye" Width="18" Height="18" />
+                                                </Button>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </DockPanel>
+                    </TabItem>
+                </TabControl>
+            </Grid>
+        </DockPanel>
+    </materialDesign:DialogHost>
+</Window>

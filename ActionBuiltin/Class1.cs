@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net.Http.Json;
 using System.Text;
 using ActionSdk;
@@ -24,7 +25,7 @@ public sealed class DelayAction : IActionHandler
             return ActionResult.Fail("ARG_MISSING", "milliseconds is required.");
         }
 
-        var ms = Convert.ToInt32(value);
+        var ms = Convert.ToInt32(value?.ToString());
         await Task.Delay(ms, cancellationToken);
         return ActionResult.Ok();
     }
@@ -178,5 +179,116 @@ public sealed class HttpRequestAction : IActionHandler
             ["statusCode"] = (int)response.StatusCode,
             ["body"] = responseText
         });
+    }
+}
+
+[RpaAction("LaunchProcess")]
+public sealed class LaunchProcessAction : IActionHandler
+{
+    public string Name => "LaunchProcess";
+    public ActionMetadata Metadata => new()
+    {
+        Name = Name,
+        DisplayName = "Launch Process",
+        Description = "Start an external process (e.g. notepad, calc).",
+        Inputs =
+        [
+            new ActionParameterDefinition { Name = "fileName", Type = "string", Required = true },
+            new ActionParameterDefinition { Name = "arguments", Type = "string", Required = false },
+            new ActionParameterDefinition { Name = "waitForExit", Type = "bool", Required = false, Description = "Wait for the process to exit (default false)." },
+            new ActionParameterDefinition { Name = "waitMs", Type = "int", Required = false, Description = "Max wait time if waitForExit is true." }
+        ],
+        Outputs =
+        [
+            new ActionParameterDefinition { Name = "exitCode", Type = "int", Required = false },
+            new ActionParameterDefinition { Name = "started", Type = "bool", Required = true }
+        ]
+    };
+
+    public async Task<ActionResult> ExecuteAsync(ActionRequest request, CancellationToken cancellationToken)
+    {
+        if (!request.Inputs.TryGetValue("fileName", out var fileNameValue) || fileNameValue is null)
+        {
+            return ActionResult.Fail("ARG_MISSING", "fileName is required.");
+        }
+
+        var fileName = fileNameValue.ToString()!;
+        var arguments = request.Inputs.TryGetValue("arguments", out var argVal) ? argVal?.ToString() ?? "" : "";
+        var waitForExit = request.Inputs.TryGetValue("waitForExit", out var waitVal) && Convert.ToBoolean(waitVal?.ToString());
+        var waitMs = request.Inputs.TryGetValue("waitMs", out var waitMsVal) ? Convert.ToInt32(waitMsVal?.ToString()) : 30_000;
+
+        var psi = new ProcessStartInfo
+        {
+            FileName = fileName,
+            Arguments = arguments,
+            UseShellExecute = true
+        };
+
+        using var process = Process.Start(psi);
+        if (process is null)
+        {
+            return ActionResult.Fail("PROCESS_FAILED", $"Unable to start '{fileName}'.");
+        }
+
+        if (waitForExit)
+        {
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            cts.CancelAfter(waitMs);
+            await process.WaitForExitAsync(cts.Token);
+            return ActionResult.Ok(new Dictionary<string, object?>
+            {
+                ["started"] = true,
+                ["exitCode"] = process.ExitCode
+            });
+        }
+
+        return ActionResult.Ok(new Dictionary<string, object?> { ["started"] = true });
+    }
+}
+
+[RpaAction("WriteFile")]
+public sealed class WriteFileAction : IActionHandler
+{
+    public string Name => "WriteFile";
+    public ActionMetadata Metadata => new()
+    {
+        Name = Name,
+        DisplayName = "Write File",
+        Description = "Write text content to a file.",
+        Inputs =
+        [
+            new ActionParameterDefinition { Name = "path", Type = "string", Required = true },
+            new ActionParameterDefinition { Name = "content", Type = "string", Required = true },
+            new ActionParameterDefinition { Name = "append", Type = "bool", Required = false }
+        ],
+        Outputs = [new ActionParameterDefinition { Name = "path", Type = "string", Required = true }]
+    };
+
+    public async Task<ActionResult> ExecuteAsync(ActionRequest request, CancellationToken cancellationToken)
+    {
+        if (!request.Inputs.TryGetValue("path", out var pathValue) || pathValue is null)
+        {
+            return ActionResult.Fail("ARG_MISSING", "path is required.");
+        }
+
+        if (!request.Inputs.TryGetValue("content", out var contentValue))
+        {
+            return ActionResult.Fail("ARG_MISSING", "content is required.");
+        }
+
+        var path = pathValue.ToString()!;
+        var content = contentValue?.ToString() ?? string.Empty;
+        var append = request.Inputs.TryGetValue("append", out var appendVal) && Convert.ToBoolean(appendVal?.ToString());
+
+        if (append)
+        {
+            await File.AppendAllTextAsync(path, content, cancellationToken);
+        }
+        else
+        {
+            await File.WriteAllTextAsync(path, content, cancellationToken);
+        }
+
+        return ActionResult.Ok(new Dictionary<string, object?> { ["path"] = path });
     }
 }

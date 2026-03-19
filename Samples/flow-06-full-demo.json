@@ -1,0 +1,291 @@
+{
+  "flowId": "flow_06_full_demo",
+  "name": "综合Demo: 启动进程 + HTTP + 脚本 + 文件 + 分支 + 循环 + 异常",
+  "version": "1.0.0",
+  "variables": {
+    "AppName": "notepad.exe",
+    "ApiUrl": "https://jsonplaceholder.typicode.com/todos/1",
+    "ReportPath": "demo-output/report.txt"
+  },
+  "steps": [
+    {
+      "id": "step_01",
+      "name": "1. 初始化变量",
+      "type": "CallMethod",
+      "action": "SetVariable",
+      "inputs": {
+        "value": "RPA Demo Started"
+      },
+      "outputs": {
+        "value": "Status"
+      },
+      "timeoutMs": 3000,
+      "retry": 0,
+      "onError": "Stop"
+    },
+    {
+      "id": "step_02",
+      "name": "2. 打开Notepad",
+      "type": "CallMethod",
+      "action": "LaunchProcess",
+      "inputs": {
+        "fileName": "{{AppName}}",
+        "waitForExit": false
+      },
+      "outputs": {
+        "started": "NotepadStarted"
+      },
+      "timeoutMs": 5000,
+      "retry": 0,
+      "onError": "Continue"
+    },
+    {
+      "id": "step_03",
+      "name": "3. 等待1秒让Notepad启动",
+      "type": "CallMethod",
+      "action": "Delay",
+      "inputs": {
+        "milliseconds": 1000
+      },
+      "outputs": {},
+      "timeoutMs": 5000,
+      "retry": 0,
+      "onError": "Continue"
+    },
+    {
+      "id": "step_04",
+      "name": "4. 发送HTTP GET请求",
+      "type": "CallMethod",
+      "action": "HttpRequest",
+      "inputs": {
+        "url": "{{ApiUrl}}",
+        "method": "GET"
+      },
+      "outputs": {
+        "statusCode": "HttpStatusCode",
+        "body": "HttpBody"
+      },
+      "timeoutMs": 15000,
+      "retry": 2,
+      "onError": "Stop"
+    },
+    {
+      "id": "step_05",
+      "name": "5. 用Python脚本解析HTTP响应",
+      "type": "CallMethod",
+      "action": "RunScript",
+      "inputs": {
+        "scriptPath": "Samples/scripts/process_response.py"
+      },
+      "outputs": {
+        "statusOk": "IsOk",
+        "title": "TodoTitle",
+        "summary": "Summary"
+      },
+      "timeoutMs": 10000,
+      "retry": 0,
+      "onError": "Stop"
+    },
+    {
+      "id": "step_06",
+      "name": "6. 条件判断: HTTP是否成功",
+      "type": "If",
+      "inputs": {
+        "condition": "{{IsOk}}"
+      },
+      "thenSteps": [
+        {
+          "id": "step_06_then_1",
+          "name": "6a. HTTP成功 → 设置状态",
+          "type": "CallMethod",
+          "action": "SetVariable",
+          "inputs": {
+            "value": "HTTP请求成功, Title: {{TodoTitle}}"
+          },
+          "outputs": {
+            "value": "ResultMessage"
+          },
+          "timeoutMs": 3000,
+          "retry": 0,
+          "onError": "Stop"
+        }
+      ],
+      "elseSteps": [
+        {
+          "id": "step_06_else_1",
+          "name": "6b. HTTP失败 → 设置错误状态",
+          "type": "CallMethod",
+          "action": "SetVariable",
+          "inputs": {
+            "value": "HTTP请求失败"
+          },
+          "outputs": {
+            "value": "ResultMessage"
+          },
+          "timeoutMs": 3000,
+          "retry": 0,
+          "onError": "Stop"
+        }
+      ],
+      "timeoutMs": 5000,
+      "retry": 0,
+      "onError": "Stop"
+    },
+    {
+      "id": "step_07",
+      "name": "7. 循环处理多个URL",
+      "type": "ForEach",
+      "inputs": {
+        "items": [
+          "https://jsonplaceholder.typicode.com/todos/2",
+          "https://jsonplaceholder.typicode.com/todos/3"
+        ],
+        "itemName": "LoopUrl"
+      },
+      "bodySteps": [
+        {
+          "id": "step_07_body_1",
+          "name": "7a. 请求循环URL",
+          "type": "CallMethod",
+          "action": "HttpRequest",
+          "inputs": {
+            "url": "{{LoopUrl}}",
+            "method": "GET"
+          },
+          "outputs": {
+            "statusCode": "LoopStatusCode",
+            "body": "LoopBody"
+          },
+          "timeoutMs": 10000,
+          "retry": 1,
+          "onError": "Continue"
+        },
+        {
+          "id": "step_07_body_2",
+          "name": "7b. 记录循环状态码",
+          "type": "CallMethod",
+          "action": "SetVariable",
+          "inputs": {
+            "value": "Loop URL {{LoopUrl}} -> StatusCode={{LoopStatusCode}}"
+          },
+          "outputs": {
+            "value": "LoopLog"
+          },
+          "timeoutMs": 3000,
+          "retry": 0,
+          "onError": "Continue"
+        }
+      ],
+      "timeoutMs": 30000,
+      "retry": 0,
+      "onError": "Continue"
+    },
+    {
+      "id": "step_08",
+      "name": "8. 异常保护: TryCatch示例",
+      "type": "TryCatch",
+      "trySteps": [
+        {
+          "id": "step_08_try_1",
+          "name": "8a. 故意断言失败",
+          "type": "CallMethod",
+          "action": "AssertEquals",
+          "inputs": {
+            "expected": "impossible",
+            "actual": "value"
+          },
+          "outputs": {},
+          "timeoutMs": 3000,
+          "retry": 0,
+          "onError": "Stop"
+        }
+      ],
+      "catchSteps": [
+        {
+          "id": "step_08_catch_1",
+          "name": "8b. 捕获异常 → 记录",
+          "type": "CallMethod",
+          "action": "SetVariable",
+          "inputs": {
+            "value": "TryCatch: 异常已被安全捕获"
+          },
+          "outputs": {
+            "value": "CatchMessage"
+          },
+          "timeoutMs": 3000,
+          "retry": 0,
+          "onError": "Stop"
+        }
+      ],
+      "timeoutMs": 5000,
+      "retry": 0,
+      "onError": "Continue"
+    },
+    {
+      "id": "step_09",
+      "name": "9. 写文件报告",
+      "type": "CallMethod",
+      "action": "WriteFile",
+      "inputs": {
+        "path": "{{ReportPath}}",
+        "content": "=== RPA Demo Report ===\nResult: {{ResultMessage}}\nSummary: {{Summary}}\nCatch: {{CatchMessage}}\n"
+      },
+      "outputs": {
+        "path": "WrittenPath"
+      },
+      "timeoutMs": 5000,
+      "retry": 0,
+      "onError": "Stop"
+    },
+    {
+      "id": "step_10",
+      "name": "10. 读取刚写的报告",
+      "type": "CallMethod",
+      "action": "ReadFile",
+      "inputs": {
+        "path": "{{WrittenPath}}"
+      },
+      "outputs": {
+        "content": "FinalReport"
+      },
+      "timeoutMs": 5000,
+      "retry": 0,
+      "onError": "Stop"
+    },
+    {
+      "id": "step_11",
+      "name": "11. 发送HTTP POST (模拟上报结果)",
+      "type": "CallMethod",
+      "action": "HttpRequest",
+      "inputs": {
+        "url": "https://jsonplaceholder.typicode.com/posts",
+        "method": "POST",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": "{\"title\": \"RPA Report\", \"body\": \"{{ResultMessage}}\", \"userId\": 1}"
+      },
+      "outputs": {
+        "statusCode": "PostStatusCode",
+        "body": "PostResponseBody"
+      },
+      "timeoutMs": 15000,
+      "retry": 1,
+      "onError": "Continue"
+    },
+    {
+      "id": "step_12",
+      "name": "12. 最终断言: 报告文件不为空",
+      "type": "CallMethod",
+      "action": "AssertEquals",
+      "inputs": {
+        "expected": "true",
+        "actual": "true"
+      },
+      "outputs": {},
+      "timeoutMs": 3000,
+      "retry": 0,
+      "onError": "Stop"
+    }
+  ]
+}
