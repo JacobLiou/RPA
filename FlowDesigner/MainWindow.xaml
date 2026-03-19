@@ -5,181 +5,253 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:FlowDesigner"
         mc:Ignorable="d"
-        Title="FlowDesigner (MVP)"
-        Height="840"
-        Width="1300"
-        MinHeight="680"
-        MinWidth="1100">
-    <Grid Margin="10">
+        Title="FlowDesigner Pro"
+        Height="900"
+        Width="1500"
+        MinHeight="720"
+        MinWidth="1280">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+    </Window.Resources>
+
+    <Grid Margin="8">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
-            <RowDefinition Height="220" />
+            <RowDefinition Height="200" />
         </Grid.RowDefinitions>
 
-        <DockPanel Grid.Row="0" Margin="0,0,0,10">
+        <!-- Toolbar -->
+        <DockPanel Grid.Row="0" Margin="0,0,0,8">
             <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
-                <Button Content="新建" Width="80" Margin="0,0,6,0" Click="NewFlow_Click" />
-                <Button Content="加载" Width="80" Margin="0,0,6,0" Click="LoadFlow_Click" />
-                <Button Content="保存" Width="80" Margin="0,0,6,0" Click="SaveFlow_Click" />
-                <Button Content="运行" Width="80" Margin="0,0,6,0" Click="RunFlow_Click" />
-                <Button Content="同步JSON" Width="100" Click="SyncJson_Click" />
+                <Button Content="新建" Width="68" Margin="0,0,4,0" Click="NewFlow_Click" />
+                <Button Content="加载" Width="68" Margin="0,0,4,0" Click="LoadFlow_Click" />
+                <Button Content="保存" Width="68" Margin="0,0,4,0" Click="SaveFlow_Click" />
+                <Button Content="运行" Width="68" Margin="0,0,4,0" Click="RunFlow_Click" />
+                <Rectangle Width="1" Fill="#444" Margin="6,2,6,2" />
+                <Button Content="删除节点" Width="80" Margin="0,0,4,0" Click="DeleteNode_Click" />
+                <Button Content="自动布局" Width="80" Margin="0,0,4,0" Click="AutoLayout_Click" />
+                <Rectangle Width="1" Fill="#444" Margin="6,2,6,2" />
+                <Button Content="同步JSON" Width="90" Click="SyncJson_Click" />
             </StackPanel>
-            <TextBlock Name="StatusText"
-                       DockPanel.Dock="Right"
-                       VerticalAlignment="Center"
-                       Text="就绪"
-                       FontWeight="SemiBold" />
+            <TextBlock Name="StatusText" DockPanel.Dock="Right" VerticalAlignment="Center" FontWeight="SemiBold" Text="就绪" Margin="12,0,0,0" />
         </DockPanel>
 
+        <!-- Main area -->
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="420" />
+                <ColumnDefinition Width="170" />
                 <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="340" />
             </Grid.ColumnDefinitions>
 
-            <GroupBox Header="步骤列表（顺序）" Grid.Column="0" Margin="0,0,10,0">
-                <DockPanel>
-                    <StackPanel Orientation="Horizontal" DockPanel.Dock="Top" Margin="6">
-                        <Button Content="添加步骤" Width="90" Margin="0,0,6,0" Click="AddStep_Click" />
-                        <Button Content="删除步骤" Width="90" Margin="0,0,6,0" Click="DeleteStep_Click" />
-                        <Button Content="上移" Width="80" Margin="0,0,6,0" Click="MoveUp_Click" />
-                        <Button Content="下移" Width="80" Click="MoveDown_Click" />
-                    </StackPanel>
-                    <DataGrid Name="StepsGrid"
-                              Margin="6"
-                              ItemsSource="{Binding Steps}"
-                              SelectedItem="{Binding SelectedStep, Mode=TwoWay}"
-                              AutoGenerateColumns="False"
-                              CanUserAddRows="False"
-                              IsReadOnly="False">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="Id" Binding="{Binding Id, UpdateSourceTrigger=PropertyChanged}" Width="1.2*" />
-                            <DataGridTextColumn Header="Name" Binding="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Width="1.4*" />
-                            <DataGridTextColumn Header="Type" Binding="{Binding Type, UpdateSourceTrigger=PropertyChanged}" Width="1*" />
-                            <DataGridTextColumn Header="Action" Binding="{Binding Action, UpdateSourceTrigger=PropertyChanged}" Width="1.4*" />
-                        </DataGrid.Columns>
-                    </DataGrid>
-                </DockPanel>
+            <!-- Toolbox -->
+            <GroupBox Header="工具箱" Grid.Column="0" Margin="0,0,6,0">
+                <ListBox Name="ToolboxList" PreviewMouseMove="ToolboxList_PreviewMouseMove">
+                    <ListBoxItem Content="CallMethod" FontWeight="SemiBold" />
+                    <ListBoxItem Content="If" FontWeight="SemiBold" />
+                    <ListBoxItem Content="Merge" FontWeight="SemiBold" />
+                </ListBox>
             </GroupBox>
 
-            <GroupBox Header="步骤属性编辑" Grid.Column="1">
-                <Grid Margin="10">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
-                        <RowDefinition Height="*" />
-                    </Grid.RowDefinitions>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="90" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="90" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
+            <!-- Canvas -->
+            <GroupBox Header="画布（拖拽添加节点，从端口拖线连接）" Grid.Column="1" Margin="0,0,6,0">
+                <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                    <Canvas Name="DesignerCanvas"
+                            Width="3000"
+                            Height="2000"
+                            Background="#0F172A"
+                            AllowDrop="True"
+                            Drop="DesignerCanvas_Drop"
+                            DragOver="DesignerCanvas_DragOver"
+                            MouseLeftButtonDown="Canvas_MouseLeftButtonDown"
+                            MouseMove="Canvas_MouseMove"
+                            MouseLeftButtonUp="Canvas_MouseLeftButtonUp">
 
-                    <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,0,8,8" VerticalAlignment="Center" Text="Id" />
-                    <TextBox Grid.Row="0" Grid.Column="1" Margin="0,0,12,8" Text="{Binding SelectedStep.Id, UpdateSourceTrigger=PropertyChanged}" />
-                    <TextBlock Grid.Row="0" Grid.Column="2" Margin="0,0,8,8" VerticalAlignment="Center" Text="Name" />
-                    <TextBox Grid.Row="0" Grid.Column="3" Margin="0,0,0,8" Text="{Binding SelectedStep.Name, UpdateSourceTrigger=PropertyChanged}" />
+                        <!-- Preview drag-line -->
+                        <Line Name="PreviewLine"
+                              Stroke="#FBBF24"
+                              StrokeThickness="2"
+                              StrokeDashArray="4 3"
+                              Visibility="Collapsed" />
 
-                    <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,0,8,8" VerticalAlignment="Center" Text="Type" />
-                    <ComboBox Grid.Row="1"
-                              Grid.Column="1"
-                              Margin="0,0,12,8"
-                              IsEditable="True"
-                              Text="{Binding SelectedStep.Type, UpdateSourceTrigger=PropertyChanged}">
-                        <ComboBoxItem Content="CallMethod" />
-                        <ComboBoxItem Content="If" />
-                        <ComboBoxItem Content="ForEach" />
-                        <ComboBoxItem Content="TryCatch" />
-                    </ComboBox>
+                        <!-- Edges -->
+                        <ItemsControl ItemsSource="{Binding Edges}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><Canvas /></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Canvas>
+                                        <Line X1="{Binding X1}" Y1="{Binding Y1}" X2="{Binding X2}" Y2="{Binding Y2}"
+                                              Stroke="{Binding StrokeColor}" StrokeThickness="2.5" />
+                                        <Polygon Points="0,0 -12,6 -12,-6" Fill="{Binding StrokeColor}">
+                                            <Polygon.RenderTransform>
+                                                <TranslateTransform X="{Binding X2}" Y="{Binding Y2}" />
+                                            </Polygon.RenderTransform>
+                                        </Polygon>
+                                        <TextBlock Canvas.Left="{Binding LabelX}" Canvas.Top="{Binding LabelY}"
+                                                   Foreground="White" FontSize="11" FontWeight="Bold" Text="{Binding Label}" />
+                                    </Canvas>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
 
-                    <TextBlock Grid.Row="1" Grid.Column="2" Margin="0,0,8,8" VerticalAlignment="Center" Text="Action" />
-                    <ComboBox Grid.Row="1"
-                              Grid.Column="3"
-                              Margin="0,0,0,8"
-                              IsEditable="True"
-                              Text="{Binding SelectedStep.Action, UpdateSourceTrigger=PropertyChanged}">
-                        <ComboBoxItem Content="SetVariable" />
-                        <ComboBoxItem Content="Delay" />
-                        <ComboBoxItem Content="AssertEquals" />
-                        <ComboBoxItem Content="ReadFile" />
-                        <ComboBoxItem Content="HttpRequest" />
-                        <ComboBoxItem Content="RunScript" />
-                    </ComboBox>
+                        <!-- Nodes -->
+                        <ItemsControl ItemsSource="{Binding Nodes}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><Canvas /></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemContainerStyle>
+                                <Style TargetType="ContentPresenter">
+                                    <Setter Property="Canvas.Left" Value="{Binding X}" />
+                                    <Setter Property="Canvas.Top" Value="{Binding Y}" />
+                                </Style>
+                            </ItemsControl.ItemContainerStyle>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Width="190" Height="88">
+                                        <!-- In port -->
+                                        <Ellipse Width="14" Height="14" Fill="#38BDF8" Stroke="#0EA5E9" StrokeThickness="2"
+                                                 HorizontalAlignment="Left" VerticalAlignment="Center" Margin="-7,0,0,0"
+                                                 Cursor="Cross"
+                                                 MouseLeftButtonDown="InPort_MouseLeftButtonDown"
+                                                 Tag="{Binding}" />
+                                        <!-- Out port -->
+                                        <Ellipse Width="14" Height="14" Fill="#A3E635" Stroke="#65A30D" StrokeThickness="2"
+                                                 HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,-7,0"
+                                                 Cursor="Cross"
+                                                 MouseLeftButtonDown="OutPort_MouseLeftButtonDown"
+                                                 Tag="{Binding}"
+                                                 Visibility="{Binding IsIfNode, Converter={StaticResource BoolToVis}, ConverterParameter=Inverse}" />
+                                        <!-- Then port (If only) -->
+                                        <Ellipse Width="14" Height="14" Fill="#60A5FA" Stroke="#3B82F6" StrokeThickness="2"
+                                                 HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,8,-7,0"
+                                                 Cursor="Cross"
+                                                 MouseLeftButtonDown="ThenPort_MouseLeftButtonDown"
+                                                 Tag="{Binding}"
+                                                 Visibility="{Binding IsIfNode, Converter={StaticResource BoolToVis}}" />
+                                        <!-- Else port (If only) -->
+                                        <Ellipse Width="14" Height="14" Fill="#F97316" Stroke="#EA580C" StrokeThickness="2"
+                                                 HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-7,8"
+                                                 Cursor="Cross"
+                                                 MouseLeftButtonDown="ElsePort_MouseLeftButtonDown"
+                                                 Tag="{Binding}"
+                                                 Visibility="{Binding IsIfNode, Converter={StaticResource BoolToVis}}" />
 
-                    <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,0,8,8" VerticalAlignment="Center" Text="TimeoutMs" />
-                    <TextBox Grid.Row="2" Grid.Column="1" Margin="0,0,12,8" Text="{Binding SelectedStep.TimeoutMs, UpdateSourceTrigger=PropertyChanged}" />
-                    <TextBlock Grid.Row="2" Grid.Column="2" Margin="0,0,8,8" VerticalAlignment="Center" Text="Retry" />
-                    <TextBox Grid.Row="2" Grid.Column="3" Margin="0,0,0,8" Text="{Binding SelectedStep.Retry, UpdateSourceTrigger=PropertyChanged}" />
+                                        <!-- Node body -->
+                                        <Border CornerRadius="8" Padding="10,6"
+                                                Margin="6,0,6,0"
+                                                Background="{Binding NodeColor}"
+                                                MouseLeftButtonDown="Node_MouseLeftButtonDown"
+                                                MouseMove="Node_MouseMove"
+                                                MouseLeftButtonUp="Node_MouseLeftButtonUp">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="BorderBrush" Value="#6B7280" />
+                                                    <Setter Property="BorderThickness" Value="1.5" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                            <Setter Property="BorderBrush" Value="#22D3EE" />
+                                                            <Setter Property="BorderThickness" Value="3" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                            <StackPanel>
+                                                <TextBlock Foreground="White" FontWeight="Bold" FontSize="13" Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Foreground="#D1D5DB" FontSize="11" Text="{Binding Type}" />
+                                                <TextBlock Foreground="#9CA3AF" FontSize="11" Text="{Binding Action}" TextTrimming="CharacterEllipsis" />
+                                            </StackPanel>
+                                        </Border>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </Canvas>
+                </ScrollViewer>
+            </GroupBox>
 
-                    <TextBlock Grid.Row="3" Grid.Column="0" Margin="0,0,8,8" VerticalAlignment="Center" Text="OnError" />
-                    <ComboBox Grid.Row="3"
-                              Grid.Column="1"
-                              Margin="0,0,12,8"
-                              IsEditable="True"
-                              Text="{Binding SelectedStep.OnError, UpdateSourceTrigger=PropertyChanged}">
-                        <ComboBoxItem Content="Stop" />
-                        <ComboBoxItem Content="Continue" />
-                    </ComboBox>
+            <!-- Properties panel -->
+            <GroupBox Header="节点属性" Grid.Column="2">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <Grid Margin="8">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="120" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="100" />
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="80" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
 
-                    <TextBlock Grid.Row="4" Grid.ColumnSpan="4" Margin="0,8,0,4" FontWeight="SemiBold" Text="Inputs（JSON对象）" />
-                    <TextBox Grid.Row="5"
-                             Grid.ColumnSpan="4"
-                             Text="{Binding SelectedStep.InputsJson, UpdateSourceTrigger=PropertyChanged}"
-                             AcceptsReturn="True"
-                             VerticalScrollBarVisibility="Auto"
-                             HorizontalScrollBarVisibility="Auto"
-                             TextWrapping="NoWrap"
-                             Height="120"
-                             FontFamily="Consolas"
-                             FontSize="13" />
+                        <TextBlock Grid.Row="0" Grid.Column="0" VerticalAlignment="Center" Text="Id" />
+                        <TextBox Grid.Row="0" Grid.Column="1" Margin="0,0,0,6" Text="{Binding SelectedNode.Id, UpdateSourceTrigger=PropertyChanged}" />
 
-                    <TextBlock Grid.Row="6" Grid.ColumnSpan="4" Margin="0,8,0,4" FontWeight="SemiBold" Text="Outputs（JSON对象: {outputName: variableName}）" />
-                    <TextBox Grid.Row="7"
-                             Grid.ColumnSpan="4"
-                             Text="{Binding SelectedStep.OutputsJson, UpdateSourceTrigger=PropertyChanged}"
-                             AcceptsReturn="True"
-                             VerticalScrollBarVisibility="Auto"
-                             HorizontalScrollBarVisibility="Auto"
-                             TextWrapping="NoWrap"
-                             FontFamily="Consolas"
-                             FontSize="13" />
-                </Grid>
+                        <TextBlock Grid.Row="1" Grid.Column="0" VerticalAlignment="Center" Text="Title" />
+                        <TextBox Grid.Row="1" Grid.Column="1" Margin="0,0,0,6" Text="{Binding SelectedNode.Title, UpdateSourceTrigger=PropertyChanged}" />
+
+                        <TextBlock Grid.Row="2" Grid.Column="0" VerticalAlignment="Center" Text="Type" />
+                        <ComboBox Grid.Row="2" Grid.Column="1" Margin="0,0,0,6" IsEditable="True" Text="{Binding SelectedNode.Type, UpdateSourceTrigger=PropertyChanged}">
+                            <ComboBoxItem Content="CallMethod" />
+                            <ComboBoxItem Content="If" />
+                            <ComboBoxItem Content="Merge" />
+                        </ComboBox>
+
+                        <TextBlock Grid.Row="3" Grid.Column="0" VerticalAlignment="Center" Text="Action" />
+                        <ComboBox Grid.Row="3" Grid.Column="1" Margin="0,0,0,6" IsEditable="True" Text="{Binding SelectedNode.Action, UpdateSourceTrigger=PropertyChanged}">
+                            <ComboBoxItem Content="SetVariable" />
+                            <ComboBoxItem Content="Delay" />
+                            <ComboBoxItem Content="AssertEquals" />
+                            <ComboBoxItem Content="ReadFile" />
+                            <ComboBoxItem Content="HttpRequest" />
+                            <ComboBoxItem Content="RunScript" />
+                        </ComboBox>
+
+                        <StackPanel Grid.Row="4" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="0,0,0,6">
+                            <TextBlock Width="80" VerticalAlignment="Center" Text="TimeoutMs" />
+                            <TextBox Width="70" Margin="0,0,8,0" Text="{Binding SelectedNode.TimeoutMs, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Width="40" VerticalAlignment="Center" Text="Retry" />
+                            <TextBox Width="50" Margin="0,0,8,0" Text="{Binding SelectedNode.Retry, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Width="50" VerticalAlignment="Center" Text="OnError" />
+                            <ComboBox Width="80" IsEditable="True" Text="{Binding SelectedNode.OnError, UpdateSourceTrigger=PropertyChanged}">
+                                <ComboBoxItem Content="Stop" />
+                                <ComboBoxItem Content="Continue" />
+                            </ComboBox>
+                        </StackPanel>
+
+                        <TextBlock Grid.Row="5" Grid.ColumnSpan="2" FontWeight="SemiBold" Text="Inputs JSON" Margin="0,4,0,2" />
+                        <TextBox Grid.Row="6" Grid.ColumnSpan="2" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
+                                 FontFamily="Consolas" FontSize="12" Text="{Binding SelectedNode.InputsJson, UpdateSourceTrigger=PropertyChanged}" />
+
+                        <TextBlock Grid.Row="7" Grid.ColumnSpan="2" FontWeight="SemiBold" Text="Outputs JSON" Margin="0,6,0,2" />
+                        <TextBox Grid.Row="8" Grid.ColumnSpan="2" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
+                                 FontFamily="Consolas" FontSize="12" Text="{Binding SelectedNode.OutputsJson, UpdateSourceTrigger=PropertyChanged}" />
+                    </Grid>
+                </ScrollViewer>
             </GroupBox>
         </Grid>
 
-        <Grid Grid.Row="2" Margin="0,10,0,0">
+        <!-- Bottom panels -->
+        <Grid Grid.Row="2" Margin="0,8,0,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
-
-            <GroupBox Header="流程JSON（高级模式，可直接编辑）" Margin="0,0,10,0">
-                <TextBox Name="FlowJsonTextBox"
-                         Margin="8"
-                         AcceptsReturn="True"
-                         VerticalScrollBarVisibility="Auto"
-                         HorizontalScrollBarVisibility="Auto"
-                         TextWrapping="NoWrap"
-                         FontFamily="Consolas"
-                         FontSize="13" />
+            <GroupBox Header="流程JSON" Margin="0,0,6,0">
+                <TextBox Name="FlowJsonTextBox" Margin="6" AcceptsReturn="True" VerticalScrollBarVisibility="Auto"
+                         HorizontalScrollBarVisibility="Auto" TextWrapping="NoWrap" FontFamily="Consolas" FontSize="12" />
             </GroupBox>
-
             <GroupBox Grid.Column="1" Header="运行日志">
-                <TextBox Name="RunLogTextBox"
-                         Margin="8"
-                         IsReadOnly="True"
-                         AcceptsReturn="True"
-                         VerticalScrollBarVisibility="Auto"
-                         TextWrapping="Wrap"
-                         FontFamily="Consolas"
-                         FontSize="13" />
+                <TextBox Name="RunLogTextBox" Margin="6" IsReadOnly="True" AcceptsReturn="True"
+                         VerticalScrollBarVisibility="Auto" TextWrapping="Wrap" FontFamily="Consolas" FontSize="12" />
             </GroupBox>
         </Grid>
     </Grid>
