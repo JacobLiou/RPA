@@ -9,7 +9,7 @@ namespace FlowRunnerGUI.Services;
 
 public sealed class FlowExecutionService
 {
-    private readonly ActionRegistry _registry;
+    private readonly string _pythonCommand;
 
     public FlowExecutionService()
     {
@@ -18,25 +18,25 @@ public sealed class FlowExecutionService
             .AddJsonFile("appsettings.json", optional: true)
             .Build();
 
-        _registry = new ActionRegistry();
-        _registry.RegisterFromAssembly(typeof(ActionBuiltin.DelayAction).Assembly);
-
-        var allowedRootDir = configuration["Script:AllowedRootDirectory"] ?? Directory.GetCurrentDirectory();
-        var pythonCommand = configuration["Script:PythonCommand"] ?? "python";
-        _registry.Register(new RunScriptAction(new PythonScriptExecutor(pythonCommand, allowedRootDir)));
+        _pythonCommand = configuration["Script:PythonCommand"] ?? "python";
     }
 
     public async Task<FlowRunResult> RunAsync(
         FlowDefinition definition,
         Action<StepExecutionResult>? onStepCompleted,
+        string rootDirectory,
         CancellationToken cancellationToken = default)
     {
+        var registry = new ActionRegistry();
+        registry.RegisterFromAssembly(typeof(ActionBuiltin.DelayAction).Assembly);
+        registry.Register(new RunScriptAction(new PythonScriptExecutor(_pythonCommand, rootDirectory)));
+
         var context = new FlowExecutionContext
         {
             OnStepCompleted = onStepCompleted
         };
 
-        var runner = new FlowRunner(_registry);
+        var runner = new FlowRunner(registry);
         return await runner.RunAsync(definition, context, cancellationToken);
     }
 }

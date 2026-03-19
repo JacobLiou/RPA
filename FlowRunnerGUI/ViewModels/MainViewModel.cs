@@ -19,6 +19,7 @@ public partial class MainViewModel : ObservableObject
     private readonly RunReportWriter _reportWriter = new();
     private readonly string _reportDir;
     private CancellationTokenSource? _runCts;
+    private string _projectRoot = Directory.GetCurrentDirectory();
 
     private static readonly JsonSerializerOptions JsonReadOptions = new()
     {
@@ -58,20 +59,26 @@ public partial class MainViewModel : ObservableObject
         if (value is null)
         {
             _loadedDefinition = null;
+            RunFlowCommand.NotifyCanExecuteChanged();
             return;
         }
 
+        _ = LoadSelectedFlowAsync(value);
+    }
+
+    private async Task LoadSelectedFlowAsync(FlowItemViewModel item)
+    {
         try
         {
-            var task = _repository.LoadAsync(value.FilePath);
-            task.Wait();
-            _loadedDefinition = task.Result;
+            _loadedDefinition = await Task.Run(() => _repository.LoadAsync(item.FilePath));
             StatusMessage = $"Loaded: {_loadedDefinition.Name}";
+            RunFlowCommand.NotifyCanExecuteChanged();
         }
         catch (Exception ex)
         {
             _loadedDefinition = null;
             StatusMessage = $"Load error: {ex.Message}";
+            RunFlowCommand.NotifyCanExecuteChanged();
         }
     }
 
@@ -101,6 +108,8 @@ public partial class MainViewModel : ObservableObject
 
         if (dialog.ShowDialog() == true)
         {
+            if (dialog.FileNames.Length > 0)
+                _projectRoot = Path.GetDirectoryName(dialog.FileNames[0]) ?? _projectRoot;
             foreach (var file in dialog.FileNames)
             {
                 AddFlowFile(file);
@@ -127,10 +136,10 @@ public partial class MainViewModel : ObservableObject
 
         try
         {
-            _lastRunResult = await _executionService.RunAsync(
-                _loadedDefinition,
-                OnStepCompleted,
-                _runCts.Token);
+            var definition = _loadedDefinition;
+            var cts = _runCts;
+            _lastRunResult = await Task.Run(() =>
+                _executionService.RunAsync(definition, OnStepCompleted, _projectRoot, cts.Token));
 
             StatusMessage = _lastRunResult.Success
                 ? $"Completed: {_lastRunResult.FlowName} - ALL PASS"
@@ -213,7 +222,7 @@ public partial class MainViewModel : ObservableObject
 
     private void OnStepCompleted(StepExecutionResult result)
     {
-        Application.Current.Dispatcher.Invoke(() =>
+        Application.Current.Dispatcher.BeginInvoke(() =>
         {
             StepResults.Add(new StepResultViewModel(result));
             ProgressValue = StepResults.Count;
@@ -241,6 +250,7 @@ public partial class MainViewModel : ObservableObject
     private void ScanFolder(string folder)
     {
         Flows.Clear();
+        _projectRoot = folder;
         var files = Directory.GetFiles(folder, "*.json", SearchOption.AllDirectories);
         foreach (var file in files)
         {

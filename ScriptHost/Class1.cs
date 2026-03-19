@@ -23,7 +23,7 @@ public sealed class PythonScriptExecutor
         int timeoutMs,
         CancellationToken cancellationToken)
     {
-        var fullScriptPath = Path.GetFullPath(scriptPath);
+        var fullScriptPath = ResolveScriptPath(scriptPath);
         if (!fullScriptPath.StartsWith(_allowedRootDirectory, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException("Script path is outside the allowed root directory.");
@@ -39,7 +39,8 @@ public sealed class PythonScriptExecutor
             CreateNoWindow = true,
             WorkingDirectory = Path.GetDirectoryName(fullScriptPath) ?? _allowedRootDirectory
         };
-        start.Environment["RPA_INPUT_JSON"] = JsonSerializer.Serialize(variables);
+        var inputJson = JsonSerializer.Serialize(variables);
+        start.Environment["RPA_INPUT_JSON"] = inputJson;
 
         using var process = new Process { StartInfo = start };
         process.Start();
@@ -59,6 +60,26 @@ public sealed class PythonScriptExecutor
         }
 
         return ParseOutput(output);
+    }
+
+    private string ResolveScriptPath(string scriptPath)
+    {
+        if (Path.IsPathRooted(scriptPath))
+        {
+            return Path.GetFullPath(scriptPath);
+        }
+
+        var normalized = scriptPath.Replace('\\', '/');
+        var rootName = Path.GetFileName(_allowedRootDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        var segments = normalized.Split('/', StringSplitOptions.RemoveEmptyEntries);
+
+        // Avoid double-prefix paths such as "<allowedRoot>/Samples/..." when allowedRoot already ends with "Samples".
+        if (segments.Length > 1 && segments[0].Equals(rootName, StringComparison.OrdinalIgnoreCase))
+        {
+            normalized = string.Join('/', segments.Skip(1));
+        }
+
+        return Path.GetFullPath(Path.Combine(_allowedRootDirectory, normalized));
     }
 
     private static Dictionary<string, object?> ParseOutput(string output)
