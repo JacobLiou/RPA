@@ -1,0 +1,39 @@
+{
+  "flowId": "flow_03_foreach",
+  "name": "ForEach Flow",
+  "version": "1.0.0",
+  "variables": {
+    "Items": ["A", "B", "C"]
+  },
+  "steps": [
+    {
+      "id": "step_loop",
+      "name": "For Each Item",
+      "type": "ForEach",
+      "inputs": {
+        "items": ["A", "B", "C"],
+        "itemName": "CurrentItem"
+      },
+      "bodySteps": [
+        {
+          "id": "step_set",
+          "name": "Set Last Item",
+          "type": "CallMethod",
+          "action": "SetVariable",
+          "inputs": {
+            "value": "{{CurrentItem}}"
+          },
+          "outputs": {
+            "value": "LastItem"
+          },
+          "timeoutMs": 3000,
+          "retry": 0,
+          "onError": "Stop"
+        }
+      ],
+      "timeoutMs": 3000,
+      "retry": 0,
+      "onError": "Stop"
+    }
+  ]
+}

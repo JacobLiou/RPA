@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "FlowDefinition",
+  "type": "object",
+  "required": ["flowId", "name", "version", "steps"],
+  "properties": {
+    "flowId": { "type": "string", "minLength": 1 },
+    "name": { "type": "string", "minLength": 1 },
+    "version": { "type": "string", "minLength": 1 },
+    "variables": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "steps": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/step" }
+    }
+  },
+  "$defs": {
+    "step": {
+      "type": "object",
+      "required": ["id", "type"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string" },
+        "type": { "type": "string", "minLength": 1 },
+        "action": { "type": ["string", "null"] },
+        "inputs": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "outputs": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "timeoutMs": { "type": "integer", "minimum": 1 },
+        "retry": { "type": "integer", "minimum": 0 },
+        "onError": {
+          "type": "string",
+          "enum": ["Stop", "Continue", "stop", "continue"]
+        },
+        "thenSteps": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/step" }
+        },
+        "elseSteps": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/step" }
+        },
+        "bodySteps": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/step" }
+        },
+        "trySteps": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/step" }
+        },
+        "catchSteps": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/step" }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

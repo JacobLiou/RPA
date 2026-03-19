@@ -1,0 +1,38 @@
+{
+  "flowId": "flow_01_basic",
+  "name": "Basic SetVariable Flow",
+  "version": "1.0.0",
+  "variables": {},
+  "steps": [
+    {
+      "id": "step_1",
+      "name": "Set Result",
+      "type": "CallMethod",
+      "action": "SetVariable",
+      "inputs": {
+        "name": "Result",
+        "value": "ok"
+      },
+      "outputs": {
+        "value": "Result"
+      },
+      "timeoutMs": 3000,
+      "retry": 0,
+      "onError": "Stop"
+    },
+    {
+      "id": "step_2",
+      "name": "Assert Result",
+      "type": "CallMethod",
+      "action": "AssertEquals",
+      "inputs": {
+        "expected": "ok",
+        "actual": "{{Result}}"
+      },
+      "outputs": {},
+      "timeoutMs": 3000,
+      "retry": 0,
+      "onError": "Stop"
+    }
+  ]
+}

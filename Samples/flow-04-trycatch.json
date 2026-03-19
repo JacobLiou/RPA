@@ -1,0 +1,49 @@
+{
+  "flowId": "flow_04_trycatch",
+  "name": "TryCatch Flow",
+  "version": "1.0.0",
+  "variables": {},
+  "steps": [
+    {
+      "id": "step_trycatch",
+      "name": "Try Catch Step",
+      "type": "TryCatch",
+      "trySteps": [
+        {
+          "id": "step_fail_assert",
+          "name": "Fail Assert",
+          "type": "CallMethod",
+          "action": "AssertEquals",
+          "inputs": {
+            "expected": "1",
+            "actual": "2"
+          },
+          "outputs": {},
+          "timeoutMs": 3000,
+          "retry": 0,
+          "onError": "Stop"
+        }
+      ],
+      "catchSteps": [
+        {
+          "id": "step_handle",
+          "name": "Handle Error",
+          "type": "CallMethod",
+          "action": "SetVariable",
+          "inputs": {
+            "value": "handled"
+          },
+          "outputs": {
+            "value": "HandledResult"
+          },
+          "timeoutMs": 3000,
+          "retry": 0,
+          "onError": "Stop"
+        }
+      ],
+      "timeoutMs": 3000,
+      "retry": 0,
+      "onError": "Stop"
+    }
+  ]
+}

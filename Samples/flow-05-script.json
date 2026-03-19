@@ -1,0 +1,26 @@
+{
+  "flowId": "flow_05_script",
+  "name": "Python Script Flow",
+  "version": "1.0.0",
+  "variables": {
+    "A": 3,
+    "B": 5
+  },
+  "steps": [
+    {
+      "id": "step_run_script",
+      "name": "Run Python",
+      "type": "CallMethod",
+      "action": "RunScript",
+      "inputs": {
+        "scriptPath": "Samples/scripts/add_numbers.py"
+      },
+      "outputs": {
+        "sum": "SumResult"
+      },
+      "timeoutMs": 10000,
+      "retry": 0,
+      "onError": "Stop"
+    }
+  ]
+}

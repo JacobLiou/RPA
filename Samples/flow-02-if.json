@@ -1,0 +1,55 @@
+{
+  "flowId": "flow_02_if",
+  "name": "If Branch Flow",
+  "version": "1.0.0",
+  "variables": {
+    "ShouldRun": true
+  },
+  "steps": [
+    {
+      "id": "step_if",
+      "name": "If Step",
+      "type": "If",
+      "inputs": {
+        "condition": "{{ShouldRun}}"
+      },
+      "thenSteps": [
+        {
+          "id": "step_then",
+          "name": "Set Then",
+          "type": "CallMethod",
+          "action": "SetVariable",
+          "inputs": {
+            "value": "then-path"
+          },
+          "outputs": {
+            "value": "BranchValue"
+          },
+          "timeoutMs": 3000,
+          "retry": 0,
+          "onError": "Stop"
+        }
+      ],
+      "elseSteps": [
+        {
+          "id": "step_else",
+          "name": "Set Else",
+          "type": "CallMethod",
+          "action": "SetVariable",
+          "inputs": {
+            "value": "else-path"
+          },
+          "outputs": {
+            "value": "BranchValue"
+          },
+          "timeoutMs": 3000,
+          "retry": 0,
+          "onError": "Stop"
+        }
+      ],
+      "timeoutMs": 3000,
+      "retry": 0,
+      "onError": "Stop"
+    }
+  ]
+}
