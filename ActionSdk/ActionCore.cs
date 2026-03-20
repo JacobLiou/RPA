@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
 using System.Reflection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace ActionSdk;
 
@@ -27,6 +29,7 @@ public sealed class ActionRequest
     public int TimeoutMs { get; init; } = 30_000;
     public Dictionary<string, object?> Inputs { get; init; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, object?> Variables { get; init; } = new(StringComparer.OrdinalIgnoreCase);
+    public ILogger Logger { get; init; } = NullLogger.Instance;
 }
 
 public sealed class ActionResult

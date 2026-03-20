@@ -2,6 +2,8 @@ using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using ActionSdk;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace ScriptHost;
 
@@ -9,12 +11,15 @@ public sealed class PythonScriptExecutor
 {
     private readonly string _pythonCommand;
     private readonly string _allowedRootDirectory;
+    private readonly ILogger<PythonScriptExecutor> _logger;
 
-    public PythonScriptExecutor(string pythonCommand = "python", string? allowedRootDirectory = null)
+    public PythonScriptExecutor(string pythonCommand = "python", string? allowedRootDirectory = null,
+        ILogger<PythonScriptExecutor>? logger = null)
     {
         _pythonCommand = pythonCommand;
         _allowedRootDirectory = Path.GetFullPath(
             string.IsNullOrWhiteSpace(allowedRootDirectory) ? Directory.GetCurrentDirectory() : allowedRootDirectory);
+        _logger = logger ?? NullLoggerFactory.Instance.CreateLogger<PythonScriptExecutor>();
     }
 
     public async Task<Dictionary<string, object?>> ExecuteAsync(
@@ -29,6 +34,8 @@ public sealed class PythonScriptExecutor
             throw new InvalidOperationException("Script path is outside the allowed root directory.");
         }
 
+        _logger.LogDebug("Script resolved: {ScriptPath} -> {FullScriptPath}", scriptPath, fullScriptPath);
+
         var start = new ProcessStartInfo
         {
             FileName = _pythonCommand,
@@ -41,6 +48,8 @@ public sealed class PythonScriptExecutor
         };
         var inputJson = JsonSerializer.Serialize(variables);
         start.Environment["RPA_INPUT_JSON"] = inputJson;
+
+        _logger.LogDebug("Starting python process: {PythonCommand} \"{FullScriptPath}\"", _pythonCommand, fullScriptPath);
 
         using var process = new Process { StartInfo = start };
         process.Start();
@@ -56,9 +65,11 @@ public sealed class PythonScriptExecutor
         var error = await errorTask;
         if (process.ExitCode != 0)
         {
+            _logger.LogError("Python script failed with exit code {ExitCode}: {StdErr}", process.ExitCode, error);
             throw new InvalidOperationException($"Python script failed. {error}");
         }
 
+        _logger.LogDebug("Python script finished, ExitCode=0");
         return ParseOutput(output);
     }
 
@@ -145,6 +156,8 @@ public sealed class RunScriptAction : IActionHandler
         }
 
         var scriptPath = scriptPathValue.ToString()!;
+        request.Logger.LogInformation("RunScript executing: {ScriptPath}", scriptPath);
+
         var mergedVariables = new Dictionary<string, object?>(request.Variables, StringComparer.OrdinalIgnoreCase);
         if (request.Inputs.TryGetValue("variables", out var varsValue) && varsValue is Dictionary<string, object?> vars)
         {
@@ -158,10 +171,13 @@ public sealed class RunScriptAction : IActionHandler
         {
             var result = await _executor.ExecuteAsync(scriptPath, mergedVariables, request.TimeoutMs, cancellationToken);
             var sanitized = Sanitize(result);
+            request.Logger.LogDebug("RunScript completed: {ScriptPath}, OutputKeys={OutputKeys}",
+                scriptPath, string.Join(",", sanitized.Keys));
             return ActionResult.Ok(sanitized);
         }
         catch (Exception ex)
         {
+            request.Logger.LogError(ex, "RunScript failed: {ScriptPath}", scriptPath);
             return ActionResult.Fail("SCRIPT_FAILED", ex.Message);
         }
     }

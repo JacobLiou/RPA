@@ -3,6 +3,8 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using ActionSdk;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace FlowEngine;
 
@@ -155,10 +157,12 @@ public static class VariableResolver
 public sealed class FlowRunner
 {
     private readonly ActionRegistry _registry;
+    private readonly ILogger<FlowRunner> _logger;
 
-    public FlowRunner(ActionRegistry registry)
+    public FlowRunner(ActionRegistry registry, ILogger<FlowRunner>? logger = null)
     {
         _registry = registry;
+        _logger = logger ?? NullLoggerFactory.Instance.CreateLogger<FlowRunner>();
     }
 
     public async Task<FlowRunResult> RunAsync(
@@ -168,6 +172,14 @@ public sealed class FlowRunner
     {
         ValidateDefinition(definition);
         context ??= new ExecutionContext();
+
+        using var flowScope = _logger.BeginScope(new Dictionary<string, object>
+        {
+            ["RunId"] = context.RunId,
+            ["FlowId"] = definition.FlowId
+        });
+
+        _logger.LogInformation("Flow started: {FlowName}, Steps={StepCount}", definition.Name, definition.Steps.Count);
 
         foreach (var kv in definition.Variables)
         {
@@ -179,6 +191,8 @@ public sealed class FlowRunner
         {
             if (context.StopRequested || cancellationToken.IsCancellationRequested)
             {
+                _logger.LogInformation("Flow stopped (StopRequested={StopRequested}, Cancelled={Cancelled})",
+                    context.StopRequested, cancellationToken.IsCancellationRequested);
                 break;
             }
 
@@ -189,12 +203,16 @@ public sealed class FlowRunner
             }
         }
 
+        var success = context.StepResults.All(s => s.Status is StepStatus.Success or StepStatus.Skipped);
+        _logger.LogInformation("Flow finished: {FlowName}, Success={Success}, TotalSteps={TotalSteps}",
+            definition.Name, success, context.StepResults.Count);
+
         return new FlowRunResult
         {
             RunId = context.RunId,
             FlowId = definition.FlowId,
             FlowName = definition.Name,
-            Success = context.StepResults.All(s => s.Status is StepStatus.Success or StepStatus.Skipped),
+            Success = success,
             Steps = context.StepResults
         };
     }
@@ -218,6 +236,12 @@ public sealed class FlowRunner
 
         for (var i = 0; i < attempts; i++)
         {
+            if (i > 0)
+            {
+                _logger.LogWarning("Step retry: {StepId}, Attempt={Attempt}/{MaxRetry}",
+                    step.Id, i + 1, attempts);
+            }
+
             lastResult = await ExecuteSingleStepAsync(step, context, cancellationToken);
             var isSuccess = lastResult.Status == StepStatus.Success;
             if (isSuccess)
@@ -239,6 +263,14 @@ public sealed class FlowRunner
         ExecutionContext context,
         CancellationToken cancellationToken)
     {
+        using var stepScope = _logger.BeginScope(new Dictionary<string, object>
+        {
+            ["StepId"] = step.Id,
+            ["ActionName"] = step.Action ?? step.Type
+        });
+
+        _logger.LogDebug("Step started: {StepId}, Type={StepType}", step.Id, step.Type);
+
         var startedAt = DateTimeOffset.UtcNow;
         var watch = Stopwatch.StartNew();
         var result = new StepExecutionResult
@@ -275,18 +307,24 @@ public sealed class FlowRunner
             result.Status = StepStatus.Timeout;
             result.ErrorCode = ErrorCodes.Timeout;
             result.ErrorMessage = "Step timed out or was cancelled.";
+            _logger.LogWarning("Step timed out: {StepId}", step.Id);
         }
         catch (Exception ex)
         {
             result.Status = StepStatus.Failed;
             result.ErrorCode = ErrorCodes.ActionFailed;
             result.ErrorMessage = ex.Message;
+            _logger.LogError(ex, "Step failed: {StepId}", step.Id);
         }
         finally
         {
             watch.Stop();
             result.DurationMs = watch.ElapsedMilliseconds;
             result.EndedAt = DateTimeOffset.UtcNow;
+
+            _logger.LogInformation("Step completed: {StepId}, Status={Status}, Duration={DurationMs}ms",
+                step.Id, result.Status, result.DurationMs);
+
             context.StepResults.Add(result);
             context.OnStepCompleted?.Invoke(result);
         }
@@ -318,7 +356,8 @@ public sealed class FlowRunner
                 StepName = step.Name,
                 TimeoutMs = step.TimeoutMs,
                 Inputs = resolvedInputs,
-                Variables = new Dictionary<string, object?>(context.Variables, StringComparer.OrdinalIgnoreCase)
+                Variables = new Dictionary<string, object?>(context.Variables, StringComparer.OrdinalIgnoreCase),
+                Logger = _logger
             },
             timeoutCts.Token);
 

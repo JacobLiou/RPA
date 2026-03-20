@@ -3,6 +3,8 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using FlowEngine;
 using Json.Schema;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Persistence;
 
@@ -16,8 +18,9 @@ public sealed class FlowJsonRepository : IFlowRepository
 {
     private readonly JsonSerializerOptions _serializerOptions;
     private readonly JsonSchema _schema;
+    private readonly ILogger<FlowJsonRepository> _logger;
 
-    public FlowJsonRepository(string schemaPath)
+    public FlowJsonRepository(string schemaPath, ILogger<FlowJsonRepository>? logger = null)
     {
         if (!File.Exists(schemaPath))
         {
@@ -31,6 +34,7 @@ public sealed class FlowJsonRepository : IFlowRepository
         };
         _serializerOptions.Converters.Add(new JsonStringEnumConverter());
         _schema = JsonSchema.FromText(File.ReadAllText(schemaPath));
+        _logger = logger ?? NullLoggerFactory.Instance.CreateLogger<FlowJsonRepository>();
     }
 
     public async Task SaveAsync(FlowDefinition definition, string path, CancellationToken cancellationToken = default)
@@ -38,14 +42,23 @@ public sealed class FlowJsonRepository : IFlowRepository
         var json = JsonSerializer.Serialize(definition, _serializerOptions);
         Validate(json);
         await File.WriteAllTextAsync(path, json, cancellationToken);
+        _logger.LogInformation("Flow saved: {FlowId} -> {Path}", definition.FlowId, path);
     }
 
     public async Task<FlowDefinition> LoadAsync(string path, CancellationToken cancellationToken = default)
     {
+        _logger.LogDebug("Loading flow from: {Path}", path);
         var json = await File.ReadAllTextAsync(path, cancellationToken);
         Validate(json);
         var flow = JsonSerializer.Deserialize<FlowDefinition>(json, _serializerOptions);
-        return flow ?? throw new InvalidOperationException("Unable to deserialize flow definition.");
+        if (flow is null)
+        {
+            throw new InvalidOperationException("Unable to deserialize flow definition.");
+        }
+
+        _logger.LogInformation("Flow loaded: {FlowId}, Name={FlowName}, Steps={StepCount}",
+            flow.FlowId, flow.Name, flow.Steps.Count);
+        return flow;
     }
 
     private void Validate(string json)
@@ -55,7 +68,9 @@ public sealed class FlowJsonRepository : IFlowRepository
         if (!result.IsValid)
         {
             var details = result.Details?.Select(d => d.InstanceLocation.ToString()) ?? [];
-            throw new InvalidOperationException($"Schema validation failed: {string.Join("; ", details)}");
+            var message = $"Schema validation failed: {string.Join("; ", details)}";
+            _logger.LogError("Schema validation failed for flow: {Details}", string.Join("; ", details));
+            throw new InvalidOperationException(message);
         }
     }
 }
@@ -84,6 +99,13 @@ public sealed class RunReportWriter : IRunReportWriter
         WriteIndented = true
     };
 
+    private readonly ILogger<RunReportWriter> _logger;
+
+    public RunReportWriter(ILogger<RunReportWriter>? logger = null)
+    {
+        _logger = logger ?? NullLoggerFactory.Instance.CreateLogger<RunReportWriter>();
+    }
+
     public async Task<string> WriteJsonAsync(FlowRunResult result, string directory, CancellationToken cancellationToken = default)
     {
         Directory.CreateDirectory(directory);
@@ -99,6 +121,7 @@ public sealed class RunReportWriter : IRunReportWriter
         var path = Path.Combine(directory, $"{result.RunId}.json");
         var content = JsonSerializer.Serialize(record, _serializerOptions);
         await File.WriteAllTextAsync(path, content, cancellationToken);
+        _logger.LogInformation("JSON report written: {ReportPath}, RunId={RunId}", path, result.RunId);
         return path;
     }
 
@@ -123,6 +146,7 @@ public sealed class RunReportWriter : IRunReportWriter
 
         var path = Path.Combine(directory, $"{result.RunId}.md");
         await File.WriteAllTextAsync(path, builder.ToString(), cancellationToken);
+        _logger.LogInformation("Markdown report written: {ReportPath}, RunId={RunId}", path, result.RunId);
         return path;
     }
 }

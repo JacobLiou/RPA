@@ -1,8 +1,7 @@
-using System.Reflection;
-using System.Text.Json;
 using ActionSdk;
 using FlowEngine;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Persistence;
 using ScriptHost;
 using FlowExecutionContext = FlowEngine.ExecutionContext;
@@ -11,6 +10,15 @@ var configuration = new ConfigurationBuilder()
     .SetBasePath(AppContext.BaseDirectory)
     .AddJsonFile("appsettings.json", optional: true)
     .Build();
+
+using var loggerFactory = LoggerFactory.Create(builder =>
+{
+    builder.SetMinimumLevel(LogLevel.Debug);
+    builder.AddConsole();
+    builder.AddFile(Path.Combine(AppContext.BaseDirectory, "logs", "rpa-{Date}.log"));
+});
+
+var logger = loggerFactory.CreateLogger("FlowRunnerCli");
 
 if (args.Length == 0)
 {
@@ -36,27 +44,27 @@ var startIndex = ParseStartIndex(args);
 var reportDir = ParseReportDir(args) ?? Path.Combine(Directory.GetCurrentDirectory(), "run-reports");
 
 var schemaPath = Path.Combine(AppContext.BaseDirectory, "flow.schema.json");
-var repository = new FlowJsonRepository(schemaPath);
+var repository = new FlowJsonRepository(schemaPath, loggerFactory.CreateLogger<FlowJsonRepository>());
 var flow = await repository.LoadAsync(flowPath);
 
 var registry = new ActionRegistry();
 registry.RegisterFromAssembly(typeof(ActionBuiltin.DelayAction).Assembly);
 var allowedRootDir = configuration["Script:AllowedRootDirectory"] ?? Directory.GetCurrentDirectory();
 var pythonCommand = configuration["Script:PythonCommand"] ?? "python";
-registry.Register(new RunScriptAction(new PythonScriptExecutor(pythonCommand, allowedRootDir)));
+registry.Register(new RunScriptAction(new PythonScriptExecutor(pythonCommand, allowedRootDir,
+    loggerFactory.CreateLogger<PythonScriptExecutor>())));
 
-var runner = new FlowRunner(registry);
+var runner = new FlowRunner(registry, loggerFactory.CreateLogger<FlowRunner>());
 var context = new FlowExecutionContext { StartStepIndex = startIndex };
 var runResult = await runner.RunAsync(flow, context);
 
-var reportWriter = new RunReportWriter();
+var reportWriter = new RunReportWriter(loggerFactory.CreateLogger<RunReportWriter>());
 var jsonPath = await reportWriter.WriteJsonAsync(runResult, reportDir);
 var mdPath = await reportWriter.WriteMarkdownAsync(runResult, reportDir);
 
-Console.WriteLine($"RunId: {runResult.RunId}");
-Console.WriteLine($"Success: {runResult.Success}");
-Console.WriteLine($"JSON report: {jsonPath}");
-Console.WriteLine($"Markdown report: {mdPath}");
+logger.LogInformation("RunId: {RunId}, Success: {Success}", runResult.RunId, runResult.Success);
+logger.LogInformation("JSON report: {JsonPath}", jsonPath);
+logger.LogInformation("Markdown report: {MdPath}", mdPath);
 
 return runResult.Success ? 0 : 2;
 

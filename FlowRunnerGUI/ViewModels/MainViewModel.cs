@@ -7,6 +7,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using FlowEngine;
 using FlowRunnerGUI.Services;
+using Microsoft.Extensions.Logging;
 using Microsoft.Win32;
 using Persistence;
 
@@ -16,7 +17,9 @@ public partial class MainViewModel : ObservableObject
 {
     private readonly FlowExecutionService _executionService;
     private readonly FlowJsonRepository _repository;
-    private readonly RunReportWriter _reportWriter = new();
+    private readonly RunReportWriter _reportWriter;
+    private readonly ILoggerFactory _loggerFactory;
+    private readonly ILogger<MainViewModel> _logger;
     private readonly string _reportDir;
     private CancellationTokenSource? _runCts;
     private string _projectRoot = Directory.GetCurrentDirectory();
@@ -45,9 +48,20 @@ public partial class MainViewModel : ObservableObject
 
     public MainViewModel()
     {
+        _loggerFactory = LoggerFactory.Create(builder =>
+        {
+            builder.SetMinimumLevel(LogLevel.Debug);
+            builder.AddConsole();
+            builder.AddFile(Path.Combine(AppContext.BaseDirectory, "logs", "rpa-gui-{Date}.log"));
+            builder.AddProvider(new GuiLoggerProvider(msg =>
+                Application.Current?.Dispatcher?.BeginInvoke(() => AppendLog(msg))));
+        });
+        _logger = _loggerFactory.CreateLogger<MainViewModel>();
+
         var schemaPath = Path.Combine(AppContext.BaseDirectory, "flow.schema.json");
-        _repository = new FlowJsonRepository(schemaPath);
-        _executionService = new FlowExecutionService();
+        _repository = new FlowJsonRepository(schemaPath, _loggerFactory.CreateLogger<FlowJsonRepository>());
+        _executionService = new FlowExecutionService(_loggerFactory);
+        _reportWriter = new RunReportWriter(_loggerFactory.CreateLogger<RunReportWriter>());
         _reportDir = Path.Combine(Directory.GetCurrentDirectory(), "run-reports");
         Directory.CreateDirectory(_reportDir);
 
@@ -132,7 +146,7 @@ public partial class MainViewModel : ObservableObject
         var totalSteps = CountStepsRecursive(_loadedDefinition.Steps);
         ProgressMax = Math.Max(totalSteps, 1);
         StatusMessage = $"Running: {_loadedDefinition.Name}...";
-        AppendLog($"=== Start: {_loadedDefinition.Name} ===");
+        _logger.LogInformation("=== Start: {FlowName} ===", _loadedDefinition.Name);
 
         try
         {
@@ -145,19 +159,19 @@ public partial class MainViewModel : ObservableObject
                 ? $"Completed: {_lastRunResult.FlowName} - ALL PASS"
                 : $"Completed: {_lastRunResult.FlowName} - HAS FAILURES";
 
-            AppendLog($"=== Finished: {(_lastRunResult.Success ? "SUCCESS" : "FAILURE")} ===");
+            _logger.LogInformation("=== Finished: {Result} ===", _lastRunResult.Success ? "SUCCESS" : "FAILURE");
 
             await SaveReport(_lastRunResult);
         }
         catch (OperationCanceledException)
         {
             StatusMessage = "Run cancelled.";
-            AppendLog("=== Cancelled ===");
+            _logger.LogWarning("=== Cancelled ===");
         }
         catch (Exception ex)
         {
             StatusMessage = $"Run error: {ex.Message}";
-            AppendLog($"ERROR: {ex.Message}");
+            _logger.LogError(ex, "Run error");
         }
         finally
         {
@@ -226,10 +240,6 @@ public partial class MainViewModel : ObservableObject
         {
             StepResults.Add(new StepResultViewModel(result));
             ProgressValue = StepResults.Count;
-
-            var icon = result.Status == StepStatus.Success ? "PASS" : "FAIL";
-            var error = string.IsNullOrEmpty(result.ErrorMessage) ? "" : $" | {result.ErrorMessage}";
-            AppendLog($"[{DateTime.Now:HH:mm:ss}] {icon} {result.StepId} ({result.StepType}) {result.DurationMs}ms{error}");
         });
     }
 
@@ -243,7 +253,7 @@ public partial class MainViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            AppendLog($"Report save error: {ex.Message}");
+            _logger.LogError(ex, "Report save error");
         }
     }
 
