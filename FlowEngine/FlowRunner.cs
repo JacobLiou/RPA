@@ -66,6 +66,7 @@ public sealed class StepExecutionResult
     public long DurationMs { get; set; }
     public Dictionary<string, object?> InputSnapshot { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, object?> OutputSnapshot { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, object?> VariableSnapshot { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public string? ErrorCode { get; set; }
     public string? ErrorMessage { get; set; }
     public DateTimeOffset StartedAt { get; set; }
@@ -87,8 +88,16 @@ public sealed class ExecutionContext
     public Dictionary<string, object?> Variables { get; } = new(StringComparer.OrdinalIgnoreCase);
     public List<StepExecutionResult> StepResults { get; } = [];
     public int? StartStepIndex { get; init; }
+    public string? StartStepId { get; init; }
     public bool StopRequested { get; private set; }
     public Action<StepExecutionResult>? OnStepCompleted { get; set; }
+
+    public bool StepMode { get; set; }
+    public SemaphoreSlim StepGate { get; } = new(0, 1);
+
+    public Func<string, bool>? CheckBreakpoint { get; set; }
+    public Action<string>? OnBeforeStep { get; set; }
+    public Action<string>? OnBreakpointHit { get; set; }
 
     public void RequestStop() => StopRequested = true;
 }
@@ -186,7 +195,16 @@ public sealed class FlowRunner
             context.Variables[kv.Key] = VariableResolver.ResolveNode(kv.Value, context.Variables);
         }
 
-        var startIndex = context.StartStepIndex ?? 0;
+        var startIndex = context.StartStepIndex
+            ?? (context.StartStepId is not null
+                ? definition.Steps.FindIndex(s => s.Id == context.StartStepId)
+                : 0);
+        if (startIndex < 0)
+        {
+            _logger.LogError("StartStepId '{StartStepId}' not found in flow steps", context.StartStepId);
+            startIndex = 0;
+        }
+
         for (var i = startIndex; i < definition.Steps.Count; i++)
         {
             if (context.StopRequested || cancellationToken.IsCancellationRequested)
@@ -196,6 +214,7 @@ public sealed class FlowRunner
                 break;
             }
 
+            await WaitForStepGateAsync(context, definition.Steps[i].Id, cancellationToken);
             var shouldStop = await ExecuteStepWithPolicyAsync(definition.Steps[i], context, cancellationToken);
             if (shouldStop)
             {
@@ -222,6 +241,22 @@ public sealed class FlowRunner
         if (string.IsNullOrWhiteSpace(definition.FlowId) || string.IsNullOrWhiteSpace(definition.Name))
         {
             throw new InvalidOperationException(ErrorCodes.InvalidDefinition);
+        }
+    }
+
+    private static async Task WaitForStepGateAsync(ExecutionContext context, string stepId, CancellationToken cancellationToken)
+    {
+        context.OnBeforeStep?.Invoke(stepId);
+
+        if (!context.StepMode && context.CheckBreakpoint?.Invoke(stepId) == true)
+        {
+            context.StepMode = true;
+            context.OnBreakpointHit?.Invoke(stepId);
+        }
+
+        if (context.StepMode)
+        {
+            await context.StepGate.WaitAsync(cancellationToken);
         }
     }
 
@@ -321,6 +356,7 @@ public sealed class FlowRunner
             watch.Stop();
             result.DurationMs = watch.ElapsedMilliseconds;
             result.EndedAt = DateTimeOffset.UtcNow;
+            result.VariableSnapshot = new Dictionary<string, object?>(context.Variables, StringComparer.OrdinalIgnoreCase);
 
             _logger.LogInformation("Step completed: {StepId}, Status={Status}, Duration={DurationMs}ms",
                 step.Id, result.Status, result.DurationMs);
@@ -387,6 +423,7 @@ public sealed class FlowRunner
 
         foreach (var child in branch)
         {
+            await WaitForStepGateAsync(context, child.Id, cancellationToken);
             var shouldStop = await ExecuteStepWithPolicyAsync(child, context, cancellationToken);
             if (shouldStop)
             {
@@ -420,6 +457,7 @@ public sealed class FlowRunner
             context.Variables[variableName] = item;
             foreach (var child in step.BodySteps)
             {
+                await WaitForStepGateAsync(context, child.Id, cancellationToken);
                 var shouldStop = await ExecuteStepWithPolicyAsync(child, context, cancellationToken);
                 if (shouldStop)
                 {
@@ -436,6 +474,7 @@ public sealed class FlowRunner
         {
             foreach (var child in step.TrySteps)
             {
+                await WaitForStepGateAsync(context, child.Id, cancellationToken);
                 var shouldStop = await ExecuteStepWithPolicyAsync(child, context, cancellationToken);
                 if (shouldStop)
                 {
@@ -453,6 +492,7 @@ public sealed class FlowRunner
         {
             foreach (var child in step.CatchSteps)
             {
+                await WaitForStepGateAsync(context, child.Id, cancellationToken);
                 var shouldStop = await ExecuteStepWithPolicyAsync(child, context, cancellationToken);
                 if (shouldStop)
                 {

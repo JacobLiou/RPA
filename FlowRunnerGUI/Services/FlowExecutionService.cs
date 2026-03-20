@@ -14,6 +14,8 @@ public sealed class FlowExecutionService
     private readonly string _pythonCommand;
     private readonly ILoggerFactory _loggerFactory;
 
+    public FlowExecutionContext? CurrentContext { get; private set; }
+
     public FlowExecutionService(ILoggerFactory? loggerFactory = null)
     {
         var configuration = new ConfigurationBuilder()
@@ -29,6 +31,11 @@ public sealed class FlowExecutionService
         FlowDefinition definition,
         Action<StepExecutionResult>? onStepCompleted,
         string rootDirectory,
+        string? startStepId = null,
+        bool stepMode = false,
+        Func<string, bool>? checkBreakpoint = null,
+        Action<string>? onBeforeStep = null,
+        Action<string>? onBreakpointHit = null,
         CancellationToken cancellationToken = default)
     {
         var registry = new ActionRegistry();
@@ -38,10 +45,23 @@ public sealed class FlowExecutionService
 
         var context = new FlowExecutionContext
         {
+            StartStepId = startStepId,
             OnStepCompleted = onStepCompleted
         };
+        context.StepMode = stepMode;
+        context.CheckBreakpoint = checkBreakpoint;
+        context.OnBeforeStep = onBeforeStep;
+        context.OnBreakpointHit = onBreakpointHit;
+        CurrentContext = context;
 
-        var runner = new FlowRunner(registry, _loggerFactory.CreateLogger<FlowRunner>());
-        return await runner.RunAsync(definition, context, cancellationToken);
+        try
+        {
+            var runner = new FlowRunner(registry, _loggerFactory.CreateLogger<FlowRunner>());
+            return await runner.RunAsync(definition, context, cancellationToken);
+        }
+        finally
+        {
+            CurrentContext = null;
+        }
     }
 }

@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using FlowEngine;
 
@@ -21,6 +22,8 @@ public partial class StepResultViewModel : ObservableObject
         _ => "\u2022"
     };
 
+    public ObservableCollection<VariableItemViewModel> Variables { get; } = [];
+
     public StepResultViewModel()
     {
     }
@@ -33,5 +36,22 @@ public partial class StepResultViewModel : ObservableObject
         Status = result.Status;
         DurationMs = result.DurationMs;
         ErrorMessage = result.ErrorMessage;
+
+        foreach (var kv in result.VariableSnapshot)
+        {
+            Variables.Add(new VariableItemViewModel
+            {
+                Name = kv.Key,
+                Value = kv.Value?.ToString() ?? "(null)",
+                TypeName = kv.Value?.GetType().Name ?? "null"
+            });
+        }
     }
+}
+
+public partial class VariableItemViewModel : ObservableObject
+{
+    [ObservableProperty] private string _name = string.Empty;
+    [ObservableProperty] private string _value = string.Empty;
+    [ObservableProperty] private string _typeName = string.Empty;
 }
